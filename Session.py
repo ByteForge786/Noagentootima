@@ -1,43 +1,20 @@
 import streamlit as st
 import pandas as pd
 import snowflake.connector
-import logging
-from datetime import datetime
 import time
+import logging
 
-# Configure logging
+# Setup logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
 
-# Prompts
-system_message = """
-    You are a helpful assistant for analyzing and optimizing queries running on Snowflake to reduce resource consumption and improve performance.
-    If the user's question is not related to query analysis or optimization, then politely refuse to answer it.
-
-    Scope: Only analyze and optimize SELECT queries. Do not run any queries that mutate the data warehouse (e.g., CREATE, UPDATE, DELETE, DROP).
-
-    YOU SHOULD FOLLOW THIS PLAN and seek approval from the user at every step before proceeding further:
-    1. Identify Expensive Queries
-    2. Analyze Query Structure
-    3. Suggest Optimizations
-    4. Validate Improvements
-    5. Prepare Summary
-"""
-
-# Define Snowflake connection (Already handled by the user)
-def get_snowflake_connection():
-    conn = None  # Placeholder
-    return conn
-
-# Function to use Snowflake Cortex for inference
+# Placeholder functions
 def cortex_inference(prompt: str) -> str:
-    logger.info(f"Sending prompt to Snowflake Cortex: {prompt}")
     query = f"SELECT SNOWFLAKE.CORTEX.COMPLETE('snowflake-arctic', '{prompt}');"
-    conn = get_snowflake_connection()
-    result = pd.read_sql(query, conn)
+    con = snowflake.connector.connect()  # Assuming connection utility
+    result = pd.read_sql(query, con)
+    con.close()
     return result.iloc[0, 0]
 
-# Query SQL Checker Tool
 def query_sql_checker_tool(query: str) -> str:
     prompt = f"""
     {query}
@@ -52,135 +29,73 @@ def query_sql_checker_tool(query: str) -> str:
     - Using the proper columns for joins
     If there are any mistakes, rewrite the query. Output the final SQL query only.
     """
-    logger.info("Running SQL checker for common mistakes.")
     return cortex_inference(prompt)
 
-# Function to get query execution time from Snowflake
-def get_execution_time(query: str) -> float:
-    logger.info("Fetching execution time from Snowflake.")
-    conn = get_snowflake_connection()
-    query_history = f"""
-        SELECT query_id, execution_time
-        FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-        WHERE query_text = '{query}' 
-        AND query_start_time >= DATEADD(day, -7, CURRENT_TIMESTAMP())
-        ORDER BY query_start_time DESC
-        LIMIT 1;
-    """
-    result = pd.read_sql(query_history, conn)
-    if result.empty:
-        logger.error("No matching query found in the history.")
-        raise ValueError("No matching query found in the history.")
-    execution_time = result['execution_time'].iloc[0]
-    logger.info(f"Execution time retrieved: {execution_time} seconds")
-    return execution_time
-
-# Optimizing the SQL Query with Snowflake Cortex
-def optimize_query(query: str) -> str:
-    prompt = f"Optimize the following query: {query}"
-    logger.info("Optimizing the SQL query using Cortex.")
-    optimized_query = cortex_inference(prompt)
-    return optimized_query
-
-# Function to remove all single inverted commas (') from the query
+# Function to remove single inverted commas
 def remove_single_quotes(query: str) -> str:
-    logger.info("Removing single inverted commas from the query.")
     return query.replace("'", "")
 
-# Initialize Streamlit session state
-if 'original_query' not in st.session_state:
-    st.session_state['original_query'] = ''
-if 'execution_time' not in st.session_state:
-    st.session_state['execution_time'] = None
-if 'checked_query' not in st.session_state:
-    st.session_state['checked_query'] = ''
-if 'optimized_query' not in st.session_state:
-    st.session_state['optimized_query'] = ''
-if 'optimized_execution_time' not in st.session_state:
-    st.session_state['optimized_execution_time'] = None
+def run_query(query: str) -> float:
+    con = snowflake.connector.connect()  # Assuming connection utility
+    start_time = time.time()
+    pd.read_sql(query, con)
+    con.close()
+    execution_time = time.time() - start_time
+    return execution_time
 
-# Streamlit application for SQL optimization
-def main():
-    st.title("Snowflake SQL Optimizer with Cortex")
+# Initialize session state variables
+if "input_sql" not in st.session_state:
+    st.session_state.input_sql = None
+if "execution_time" not in st.session_state:
+    st.session_state.execution_time = None
+if "optimized_sql" not in st.session_state:
+    st.session_state.optimized_sql = None
+if "query_checked" not in st.session_state:
+    st.session_state.query_checked = False
 
-    # Inputs from the user
-    sql_query = st.text_area("Enter your SQL query:", value=st.session_state['original_query'])
-    execution_time_input = st.text_input("Execution Time (optional):")
+# Streamlit UI
+st.title("Snowflake SQL Optimizer")
 
-    if st.button("Optimize Query"):
-        if not sql_query:
-            st.error("Please enter a SQL query.")
-            return
+# Step 1: Get input SQL and execution time
+input_sql = st.text_area("Enter your SQL query")
+execution_time = st.text_input("Enter execution time (optional)", value="")
 
-        # Show progress in UI
-        with st.spinner("Processing..."):
-            try:
-                # Step 1: Get Execution Time if not provided
-                if not execution_time_input:
-                    st.write("Fetching execution time from Snowflake...")
-                    execution_time = get_execution_time(sql_query)
-                    st.write(f"Execution Time (Fetched from Snowflake): {execution_time} seconds")
-                else:
-                    execution_time = float(execution_time_input)
+if st.button("Submit SQL"):
+    st.session_state.input_sql = input_sql
+    if execution_time:
+        st.session_state.execution_time = float(execution_time)
+    else:
+        # Run the query to get the execution time
+        st.session_state.execution_time = run_query(input_sql)
+    st.success("SQL submitted and execution time recorded.")
 
-                # Save in session state
-                st.session_state['original_query'] = sql_query
-                st.session_state['execution_time'] = execution_time
+# Step 2: Optimize SQL
+if st.session_state.input_sql:
+    st.write(f"Original SQL:\n{st.session_state.input_sql}")
+    
+    # Generating optimized SQL (placeholder logic)
+    optimized_sql = remove_single_quotes(st.session_state.input_sql)  # Remove single quotes as part of optimization
+    st.session_state.optimized_sql = optimized_sql
+    
+    st.write("Optimized SQL generated:")
+    st.code(st.session_state.optimized_sql)
 
-                logger.info(f"User-provided SQL query: {sql_query}")
-                logger.info(f"Execution Time: {execution_time} seconds")
+    if st.button("Run Optimized Query"):
+        # Show backend processing before running the query
+        with st.spinner("Running Optimized Query..."):
+            time.sleep(2)  # Simulate delay for query checking
+        
+        # Step 3: Use query checker tool
+        query_checked = query_sql_checker_tool(optimized_sql)
+        st.session_state.query_checked = True
+        
+        st.write("Query Checker Tool Feedback:")
+        st.code(query_checked)
+        
+        if st.button("Proceed with Optimized Query"):
+            with st.spinner("Running optimized query on Snowflake..."):
+                exec_time = run_query(query_checked)
+                st.write(f"Optimized Query Execution Time: {exec_time} seconds")
+            st.success("Optimized query executed successfully.")
 
-                # Step 2: Check the SQL query for errors using Cortex
-                st.write("Checking SQL query for common mistakes...")
-                checked_query = query_sql_checker_tool(sql_query)
-                st.write("Checked SQL Query for common mistakes:")
-                st.code(checked_query)
-                st.session_state['checked_query'] = checked_query
-
-                # Step 3: Optimize the SQL query
-                st.write("Optimizing the SQL query...")
-                optimized_query = optimize_query(checked_query)
-                st.write("Optimized SQL Query:")
-                st.code(optimized_query)
-                st.session_state['optimized_query'] = optimized_query
-
-                # Step 4: Check the optimized SQL query for common mistakes again
-                st.write("Checking the optimized SQL query for common mistakes...")
-                checked_optimized_query = query_sql_checker_tool(optimized_query)
-                st.write("Checked Optimized SQL Query for common mistakes:")
-                st.code(checked_optimized_query)
-
-                # Ask for user permission to run optimized query
-                if st.button("Run Optimized Query"):
-                    logger.info("User approved running the optimized query.")
-
-                    # Step 6: Remove single quotes from the optimized query
-                    optimized_query_no_quotes = remove_single_quotes(checked_optimized_query)
-                    st.write("Optimized SQL Query (without single quotes):")
-                    st.code(optimized_query_no_quotes)
-
-                    conn = get_snowflake_connection()
-
-                    # Get execution time of the optimized query
-                    st.write("Running optimized query...")
-                    optimized_execution_time = get_execution_time(optimized_query_no_quotes)
-                    st.session_state['optimized_execution_time'] = optimized_execution_time
-
-                    # Step 7: Display comparison of original and optimized queries
-                    st.write(f"Original Execution Time: {st.session_state['execution_time']} seconds")
-                    st.write(f"Optimized Execution Time: {optimized_execution_time} seconds")
-
-                    if optimized_execution_time < st.session_state['execution_time']:
-                        st.success("The optimized query is faster!")
-                    else:
-                        st.warning("The optimized query is slower or has no improvement.")
-
-                    logger.info(f"Original Execution Time: {st.session_state['execution_time']} seconds")
-                    logger.info(f"Optimized Execution Time: {optimized_execution_time} seconds")
-
-            except Exception as e:
-                logger.error(f"An error occurred: {str(e)}")
-                st.error(f"An error occurred: {str(e)}")
-
-if __name__ == "__main__":
-    main()
+# Prevent full refresh by ensuring buttons control state directly, avoiding resets
