@@ -26,3 +26,23 @@ def extract_code(code):
     else:
         # If no trigger words are found, return None or an empty string
         return None
+
+
+# Function to use Snowflake Cortex for inference with system message
+def cortex_inference(prompt: str, user_query: str) -> str:
+    logger.info(f"Sending prompt to Snowflake Cortex: {prompt}")
+    
+    # Include the system message along with the user input
+    query = f"""
+        SELECT SNOWFLAKE.CORTEX.COMPLETE(
+            'snowflake-arctic',
+            [
+                {{'role': 'system', 'content': '{system_message}'}},
+                {{'role': 'user', 'content': '{user_query}'}}
+            ], 
+            {{}}
+        ) as response;
+    """
+    conn = get_snowflake_connection()
+    result = pd.read_sql(query, conn)
+    return result.iloc[0, 0]
