@@ -210,3 +210,171 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+import streamlit as st
+import pandas as pd
+import snowflake.connector
+import logging
+from datetime import datetime, timedelta
+import time
+
+# ... (keep the existing imports and logging setup)
+
+def get_snowflake_connection():
+    # ... (keep the existing connection function)
+
+def get_execution_time(query: str) -> float:
+    logger.info("Fetching execution time from Snowflake.")
+    conn = get_snowflake_connection()
+    query_history = f"""
+        SELECT query_id, execution_time
+        FROM SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+        WHERE query_text = '{query}' 
+        AND query_start_time >= DATEADD(day, -7, CURRENT_TIMESTAMP())
+        ORDER BY query_start_time DESC
+        LIMIT 1;
+    """
+    result = pd.read_sql(query_history, conn)
+    conn.close()
+    if result.empty:
+        logger.error("No matching query found in the history.")
+        raise ValueError("No matching query found in the history.")
+    execution_time = result['execution_time'].iloc[0] / 1000  # Convert to seconds
+    logger.info(f"Execution time retrieved: {execution_time} seconds")
+    return execution_time
+
+def execute_query(query: str) -> pd.DataFrame:
+    logger.info("Executing query in Snowflake.")
+    conn = get_snowflake_connection()
+    result = pd.read_sql(query, conn)
+    conn.close()
+    return result
+
+def compare_and_execute_queries(original_query: str, optimized_query: str) -> tuple:
+    logger.info("Comparing and executing queries.")
+    
+    # Execute both queries to ensure they're in the query history
+    original_result = execute_query(original_query)
+    optimized_result = execute_query(optimized_query)
+    
+    # Wait for a short time to ensure queries are recorded in history
+    time.sleep(5)
+    
+    # Get execution times for both queries
+    try:
+        original_execution_time = get_execution_time(original_query)
+        optimized_execution_time = get_execution_time(optimized_query)
+    except ValueError as e:
+        logger.error(f"Error retrieving execution times: {str(e)}")
+        st.error(f"Error retrieving execution times: {str(e)}")
+        return None, None, None, None, None
+    
+    # Compare results
+    results_match = original_result.equals(optimized_result)
+    
+    return original_query, original_execution_time, optimized_query, optimized_execution_time, results_match
+
+# ... (keep other functions like cortex_inference, query_sql_checker_tool, optimize_query, remove_single_quotes)
+
+def main():
+    st.title("Snowflake SQL Optimizer with Cortex")
+
+    # Initialize session state variables if not present
+    if 'sql_query' not in st.session_state:
+        st.session_state.sql_query = ''
+    if 'checked_query' not in st.session_state:
+        st.session_state.checked_query = ''
+    if 'optimized_query' not in st.session_state:
+        st.session_state.optimized_query = ''
+    if 'comparison_results' not in st.session_state:
+        st.session_state.comparison_results = None
+
+    # Inputs from the user
+    sql_query = st.text_area("Enter your SQL query:", value=st.session_state.sql_query)
+
+    if st.button("Optimize Query"):
+        if not sql_query:
+            st.error("Please enter a SQL query.")
+            return
+
+        # Save SQL query in session state
+        st.session_state.sql_query = sql_query
+
+        # Show progress in UI
+        with st.spinner("Processing..."):
+            try:
+                logger.info(f"User-provided SQL query: {sql_query}")
+
+                # Step 1: Check the SQL query for errors using Cortex
+                st.write("Checking SQL query for common mistakes...")
+                st.session_state.checked_query = query_sql_checker_tool(sql_query)
+                st.write("Checked SQL Query for common mistakes:")
+                st.code(st.session_state.checked_query)
+
+                # Step 2: Optimize the SQL query
+                st.write("Optimizing the SQL query...")
+                st.session_state.optimized_query = optimize_query(st.session_state.checked_query)
+                st.write("Optimized SQL Query:")
+                st.code(st.session_state.optimized_query)
+
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                st.error(f"An error occurred: {str(e)}")
+
+    # Step 3: Run Optimized Query
+    if st.session_state.optimized_query:
+        if st.button("Run Optimized Query"):
+            try:
+                # Step 4: Remove single quotes from optimized query
+                optimized_query_no_quotes = remove_single_quotes(st.session_state.optimized_query)
+                st.write("Optimized SQL Query (without single quotes):")
+                st.code(optimized_query_no_quotes)
+
+                # Step 5: Compare and execute queries
+                st.write("Comparing and executing queries...")
+                comparison_results = compare_and_execute_queries(
+                    st.session_state.sql_query,
+                    optimized_query_no_quotes
+                )
+
+                if comparison_results[0] is not None:
+                    original_query, original_time, optimized_query, optimized_time, results_match = comparison_results
+                    # Store results in session state
+                    st.session_state.comparison_results = {
+                        'original_query': original_query,
+                        'original_time': original_time,
+                        'optimized_query': optimized_query,
+                        'optimized_time': optimized_time,
+                        'results_match': results_match
+                    }
+                else:
+                    st.error("Failed to retrieve comparison results.")
+
+            except Exception as e:
+                logger.error(f"An error occurred: {str(e)}")
+                st.error(f"An error occurred: {str(e)}")
+
+    # Display comparison results if available
+    if st.session_state.comparison_results:
+        st.write("Comparison Results:")
+        st.write(f"Original Query Execution Time: {st.session_state.comparison_results['original_time']} seconds")
+        st.write(f"Optimized Query Execution Time: {st.session_state.comparison_results['optimized_time']} seconds")
+        
+        if st.session_state.comparison_results['results_match']:
+            st.success("The results of both queries match.")
+        else:
+            st.warning("The results of the queries do not match.")
+
+        if st.session_state.comparison_results['optimized_time'] < st.session_state.comparison_results['original_time']:
+            st.success("The optimized query is faster!")
+        else:
+            st.warning("The optimized query is slower or has no improvement.")
+
+if __name__ == "__main__":
+    main()
