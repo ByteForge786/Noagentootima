@@ -378,3 +378,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+def df_content_equals(df1, df2):
+    # Sort columns alphabetically
+    df1_sorted = df1.reindex(sorted(df1.columns), axis=1)
+    df2_sorted = df2.reindex(sorted(df2.columns), axis=1)
+    
+    # Reset index
+    df1_sorted = df1_sorted.reset_index(drop=True)
+    df2_sorted = df2_sorted.reset_index(drop=True)
+    
+    # Compare the DataFrames
+    return df1_sorted.equals(df2_sorted)
