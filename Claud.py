@@ -392,3 +392,17 @@ def df_content_equals(df1, df2):
     
     # Compare the DataFrames
     return df1_sorted.equals(df2_sorted)
+
+
+def df_content_equals(df1, df2):
+    # Sort columns alphabetically
+    df1_sorted = df1.reindex(sorted(df1.columns), axis=1)
+    df2_sorted = df2.reindex(sorted(df2.columns), axis=1)
+    
+    # Sort rows based on all columns to handle row randomness
+    df1_sorted = df1_sorted.sort_values(by=list(df1_sorted.columns)).reset_index(drop=True)
+    df2_sorted = df2_sorted.sort_values(by=list(df2_sorted.columns)).reset_index(drop=True)
+    
+    # Compare the DataFrames
+    return df1_sorted.equals(df2_sorted)
+
