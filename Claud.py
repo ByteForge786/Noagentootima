@@ -406,3 +406,48 @@ def df_content_equals(df1, df2):
     # Compare the DataFrames
     return df1_sorted.equals(df2_sorted)
 
+
+def df_content_equals(df1, df2):
+    # Find the common columns
+    common_columns = df1.columns.intersection(df2.columns)
+    
+    # Sort columns alphabetically within common columns
+    df1_sorted = df1[common_columns].reindex(sorted(common_columns), axis=1)
+    df2_sorted = df2[common_columns].reindex(sorted(common_columns), axis=1)
+    
+    # Sort rows based on all common columns to handle row randomness
+    df1_sorted = df1_sorted.sort_values(by=list(df1_sorted.columns)).reset_index(drop=True)
+    df2_sorted = df2_sorted.sort_values(by=list(df2_sorted.columns)).reset_index(drop=True)
+    
+    # Compare the DataFrames
+    return df1_sorted.equals(df2_sorted)
+
+import pandas as pd
+import hashlib
+
+def hash_row(row):
+    """Hashes a row by converting it to a string and using a hash function."""
+    row_string = ','.join(map(str, row))
+    return hashlib.md5(row_string.encode()).hexdigest()
+
+def df_content_equals(df1, df2):
+    # Find common columns
+    common_columns = df1.columns.intersection(df2.columns)
+    
+    # Reduce both DataFrames to the common columns
+    df1_common = df1[common_columns]
+    df2_common = df2[common_columns]
+    
+    # Hash each row in both DataFrames
+    df1_hashes = df1_common.apply(hash_row, axis=1).sort_values().reset_index(drop=True)
+    df2_hashes = df2_common.apply(hash_row, axis=1).sort_values().reset_index(drop=True)
+    
+    # Aggregate the hashes (e.g., by concatenating them) and compare
+    df1_aggregate_hash = hashlib.md5(''.join(df1_hashes).encode()).hexdigest()
+    df2_aggregate_hash = hashlib.md5(''.join(df2_hashes).encode()).hexdigest()
+    
+    # Return whether the aggregate hashes match
+    return df1_aggregate_hash == df2_aggregate_hash
+
+
+
