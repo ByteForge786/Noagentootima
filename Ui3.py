@@ -1,6 +1,40 @@
 import streamlit as st
-from PIL import Image
 import base64
+
+# Function to get base64 encoded image
+def get_base64_of_bin_file(bin_file):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# Function to set background image with fade effect
+def set_background_with_fade(image_file):
+    bin_str = get_base64_of_bin_file(image_file)
+    page_bg_img = f'''
+    <style>
+    [data-testid="stSidebar"] {{
+        background-image: linear-gradient(to bottom, rgba(237, 28, 36, 0), rgba(237, 28, 36, 1) 30%),
+                          url("data:image/png;base64,{bin_str}");
+        background-size: cover;
+        background-position: top center;
+        background-repeat: no-repeat;
+        background-attachment: local;
+    }}
+    [data-testid="stSidebar"]::before {{
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, rgba(237, 28, 36, 0), rgba(237, 28, 36, 1));
+    }}
+    [data-testid="stSidebar"] .css-pkbazv {{
+        color: white;
+    }}
+    </style>
+    '''
+    st.markdown(page_bg_img, unsafe_allow_html=True)
 
 # Set page config
 st.set_page_config(page_title="Nomura Holdings Chatbot", layout="wide")
@@ -29,35 +63,28 @@ st.markdown("""
     }
     [data-testid="stSidebar"] {
         background-color: #ED1C24;
-        padding-top: 2rem;
     }
-    [data-testid="stSidebar"] .css-pkbazv {
-        color: white;
-    }
-    .sidebar-logo {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 1rem 0;
-    }
-    .sidebar-logo img {
-        width: 80%;
-        height: auto;
-        object-fit: contain;
-        filter: brightness(0) invert(1);
+    .sidebar-content {
+        position: relative;
+        z-index: 1;
     }
 </style>
 """, unsafe_allow_html=True)
 
+# Set background with fade effect
+set_background_with_fade('path_to_nomura_logo.png')  # Replace with actual path to Nomura logo
+
 # Sidebar
 with st.sidebar:
-    st.markdown('<div class="sidebar-logo"><img src="https://upload.wikimedia.org/wikipedia/commons/5/55/Nomura_logo.svg" alt="Nomura Logo"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-content">', unsafe_allow_html=True)
+    st.markdown("## NOMURA")
     st.markdown("---")
     st.header("Nomura Holdings Info")
     st.info("Nomura Holdings, Inc. is a Japanese financial holding company and a principal member of the Nomura Group. It is a major participant in the global financial markets.")
     
     if st.button("Learn More About Nomura"):
         st.markdown("[Visit Nomura's Website](https://www.nomura.com/)")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # Main content
 st.title("Nomura Holdings Chatbot")
